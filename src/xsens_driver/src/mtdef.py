@@ -184,53 +184,56 @@ class Baudrates(object):
 
 class XDIGroup:
 	"""Values for the XDI groups."""
-	Temperature				= 0x0800
-	Timestamp				= 0x1000
+	Temperature			= 0x0800
+	Timestamp			= 0x1000
 	OrientationData			= 0x2000
-	Pressure				= 0x3000
+	Pressure			= 0x3000
 	Acceleration			= 0x4000
-	Position				= 0x5000
+	Position			= 0x5000
 	AngularVelocity			= 0x8000
-	GNSS					= 0x7000
-	SensorComponentReadout	= 0xA000
-	AnalogIn				= 0xB000
-	Magnetic				= 0xC000
-	Velocity				= 0xD000
-	Status					= 0xE000
+	GNSS				= 0x7000
+	SensorComponentReadout		= 0xA000
+	AnalogIn			= 0xB000
+	Magnetic			= 0xC000
+	Velocity			= 0xD000
+	Status				= 0xE000
 
 class XDIMessage:
 	"""Values for the MKIV output data presets."""
 	PacketCounter			= 0x00001020
-	PaddedFs				= 0x0000FFFF
+	PaddedFs			= 0x0000FFFF
 	SampleTimeFine			= 0x00001060
-	DeltaV					= 0x00004010 
-	DeltaVFs				= 0x00000190 # 400Hz
-	FsModule				= 0x00000064 # 100Hz for 1-series and FMT1000 series
+	DeltaV				= 0x00004010 
+	DeltaVFs			= 0x00000190 # 400Hz
+	FsModule			= 0x00000064 # 100Hz for 1-series and FMT1000 series
 	Acceleration			= 0x00004020
 	AccelerationFs 			= 0x00000190 # 400Hz
-	DeltaQ					= 0x00008030
-	DeltaQFs				= 0x00000190 # 400Hz
-	RateOfTurn				= 0x00008020
+	DeltaQ				= 0x00008030
+	DeltaQFs			= 0x00000190 # 400Hz
+	RateOfTurn			= 0x00008020
 	RateOfTurnFs			= 0x00000190 # 400Hz  
 	MagneticField			= 0x0000C020
 	MagneticFieldFs			= 0x00000064 # 100Hz
-	Pressure				= 0x00003010
-	PressureFs				= 0x00000032 # 50Hz
-	StatusWord				= 0x0000E020
-	GnssPvtData				= 0x00007010 # 4Hz TBD
-	GnssSatInfo				= 0x00007020 # 4Hz TBD
-	GnssFs					= 0x00000004
+	Pressure			= 0x00003010
+	PressureFs			= 0x00000032 # 50Hz
+	StatusWord			= 0x0000E020
+	GnssPvtData			= 0x00007010 # 4Hz TBD
+	GnssSatInfo			= 0x00007020 # 4Hz TBD
+	GnssFs				= 0x00000004
 	PositionLatLon			= 0x00005040 # Latitude and longitude
 	PositionHeight			= 0x00005020 # Ellipsoidal height
-	Velocity 				= 0x0000D010 # Velocity in ENU
-	Orientation				= 0x00002030 # Euler orientation ENU
+	Velocity 			= 0x0000D010 # Velocity in ENU
+	Orientation			= 0x00002030 # Euler orientation ENU
 	OrientationQuat			= 0x00002010 # Quaternion orientation ENU
+	# Added by Harold
+	FreeAcc 			= 0x00004030 # ->> Accelerations without gravity effect
+	Temp				= 0x00008010 # Temperature
 
 class XDIProductMask:
 	"""Product masks for the Xsens MTi series devices."""
-	MTi1Series				= "8" # 0x08
-	MTi7Device				= "7" # 0x07
-	MTi10Series				= "6" # 0x06
+	MTi1Series			= "8" # 0x08
+	MTi7Device			= "7" # 0x07
+	MTi10Series			= "6" # 0x06
 	MTi100Series			= "7" # 0x07
 	MTi700Device			= "7" # this is a subset of the 100-series 
 	

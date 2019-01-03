@@ -430,6 +430,9 @@ class MTDevice(object):
 		mImuMag = self.getMtiConfigBytes(XDIMessage.MagneticField, new_mag_period)
 		mImuGyr = self.getMtiConfigBytes(XDIMessage.RateOfTurn, rate_imu_period)
 		mImuAcc = self.getMtiConfigBytes(XDIMessage.Acceleration, rate_imu_period)
+		#### # Added by Harold
+		mFreeAcc = self.getMtiConfigBytes(XDIMessage.FreeAcc, rate_imu_period)  
+		# --------------------------------------------------------------------
 		"Baro data"
 		mImuP = self.getMtiConfigBytes(XDIMessage.Pressure, new_pressure_period)
 		"GNSS data"
@@ -482,7 +485,10 @@ class MTDevice(object):
 				data = mStf+mImuGyr+mImuAcc+mImuMag+mSw+mOrientationQuat
 			elif mtiMode == 3:
 				print "Enabled publishing all filter estimates"
-				data = mStf+mSw+mOrientation
+				#data = mStf+mSw+mOrientation
+				# Aded by Harold
+				data = mStf+mSw+mOrientation+mOrientationQuat+mImuGyr+mImuMag+mImuAcc+mFreeAcc
+				# ----------------------------------------------------------
 			else:
 				raise MTException("unknown mtiMode: (%d)."%	(mtiMode))
 		elif (deviceIDProductMask[2] == XDIProductMask.MTi1Series) & (deviceTypeMask[2] == XDIProductMask.MTi7Device):
@@ -742,11 +748,23 @@ class MTDevice(object):
 				elif group == XDIGroup.Timestamp:
 					output['Timestamp'] = parse_timestamp(data_id, content, ffmt)
 				elif group == XDIGroup.OrientationData:
-					output['Orientation Data'] = parse_orientation_data(data_id, content, ffmt)
+					# Added by Harold   OrientationQuat
+					orientation_data = parse_orientation_data(data_id, content, ffmt)
+					if "Q1" in orientation_data:
+						output['OrientationDataQuad'] = parse_orientation_data(data_id, content, ffmt)
+					elif "Yaw" in orientation_data:
+						output['OrientationData'] = parse_orientation_data(data_id, content, ffmt)
+					# ------------------------------------------------------------
 				elif group == XDIGroup.Pressure:
 					output['Pressure'] = parse_pressure(data_id, content, ffmt)
 				elif group == XDIGroup.Acceleration:
-					output['Acceleration'] = parse_acceleration(data_id, content, ffmt)
+					# Added by Harold
+					acc_data = parse_acceleration(data_id, content, ffmt)
+					if "accZ" in acc_data:
+						output['Acceleration'] = parse_acceleration(data_id, content, ffmt)
+					elif "freeAccZ" in acc_data:
+						output['FreeAcc'] = parse_acceleration(data_id, content, ffmt)
+					# -------------------------------------------------------------
 				elif group == XDIGroup.Position:
 					temp, dataFlagPos = parse_position(data_id, content, ffmt)
 					if dataFlagPos:

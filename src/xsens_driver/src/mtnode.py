@@ -110,19 +110,17 @@ class XSensDriver(object):
 				message='No status information')
 		self.diag_msg.status = [self.stest_stat, self.xkf_stat, self.gps_stat]
 
-		self.imu_pub = rospy.Publisher('mti/sensor/imu', Imu, queue_size=10) #IMU message
-		self.ss_pub = rospy.Publisher('mti/sensor/sample', sensorSample, queue_size=10) # sensorSample
-		self.mag_pub = rospy.Publisher('mti/sensor/magnetic', Vector3Stamped, queue_size=10) # magnetic
-		self.baro_pub = rospy.Publisher('mti/sensor/pressure', baroSample, queue_size=10) # baro
-		self.gnssPvt_pub = rospy.Publisher('mti/sensor/gnssPvt', gnssSample, queue_size=10) # GNSS PVT
+		self.imu_pub 	= rospy.Publisher('mti/sensor/imu', Imu, queue_size=10) #IMU message
+		self.imu_free_pub = rospy.Publisher('mti/sensor/imu_free', Imu, queue_size=10) #IMU message free Acceleration --- added by Harold
+		self.ss_pub 	= rospy.Publisher('mti/sensor/sample', sensorSample, queue_size=10) # sensorSample
+		self.mag_pub 	= rospy.Publisher('mti/sensor/magnetic', Vector3Stamped, queue_size=10) # magnetic
+		self.baro_pub 	= rospy.Publisher('mti/sensor/pressure', baroSample, queue_size=10) # baro
+		self.gnssPvt_pub= rospy.Publisher('mti/sensor/gnssPvt', gnssSample, queue_size=10) # GNSS PVT
 		#self.gnssSatinfo_pub = rospy.Publisher('mti/sensor/gnssStatus', GPSStatus, queue_size=10) # GNSS SATINFO
-		self.ori_pub = rospy.Publisher('mti/filter/orientation', orientationEstimate, queue_size=10) # XKF/XEE orientation
-		self.vel_pub = rospy.Publisher('mti/filter/velocity', velocityEstimate, queue_size=10) # XKF/XEE velocity
-		self.pos_pub = rospy.Publisher('mti/filter/position', positionEstimate, queue_size=10) # XKF/XEE position
-		
-		self.temp_pub = rospy.Publisher('temperature', Float32, queue_size=10)	# decide type
-		
-
+		self.ori_pub 	= rospy.Publisher('mti/filter/orientation', orientationEstimate, queue_size=10) # XKF/XEE orientation
+		self.vel_pub 	= rospy.Publisher('mti/filter/velocity', velocityEstimate, queue_size=10) # XKF/XEE velocity
+		self.pos_pub 	= rospy.Publisher('mti/filter/position', positionEstimate, queue_size=10) # XKF/XEE position
+		self.temp_pub 	= rospy.Publisher('mti/temperature', Float32, queue_size=10)	# decide type
 
 
 	def spin(self):
@@ -153,11 +151,13 @@ class XSensDriver(object):
 
 		# get data (None if not present)
 		#temp = data.get('Temp')	# float
-		orient_data = data.get('Orientation Data')
+		orient_data = data.get('OrientationData')
 		velocity_data = data.get('Velocity')
 		position_data = data.get('Latlon')
 		altitude_data = data.get('Altitude')
 		acc_data = data.get('Acceleration')
+		acc_data_free = data.get('FreeAcc') # Added by Harold
+		orient_data_quad = data.get('OrientationDataQuad') # Added by Harold
 		gyr_data = data.get('Angular Velocity')
 		mag_data = data.get('Magnetic')
 		pressure_data = data.get('Pressure')
@@ -183,7 +183,7 @@ class XSensDriver(object):
 		gnssPvt_msg = gnssSample()
 		pub_gnssPvt = False
 		#gnssSatinfo_msg = GPSStatus()
-		#pub_gnssSatinfo = False		
+		#pub_gnssSatinfo = False
 		# All filter related outputs
 		"Supported in mode 3"
 		ori_msg = orientationEstimate()
@@ -194,30 +194,46 @@ class XSensDriver(object):
 		"Supported in mode 3 for MTi-G-7xx devices"
 		pos_msg = positionEstimate()
 		pub_pos = False
-		
+		#added by Harold ---------------------------
+		# free accelerations
+		imu_msg_free = Imu() #added by Harold
+		pub_imu_free = False #added by Harold
+		#Oientation_Quad
+		#ori_msg_quad = orientationEstimate()
+                #pub_ori_quad = False
+		#---------------------------------------------
 		secs = 0
 		nsecs = 0
-		
+		#
 		if time_data:
 			# first getting the sampleTimeFine
 			time = time_data['SampleTimeFine']
 			secs = 100e-6*time
-			nsecs = 1e5*time - 1e9*math.floor(secs)							
-		
+			nsecs = 1e5*time - 1e9*math.floor(secs)
 		if acc_data:
 			if 'Delta v.x' in acc_data: # found delta-v's
 				pub_ss = True
 				ss_msg.internal.imu.dv.x = acc_data['Delta v.x']
 				ss_msg.internal.imu.dv.y = acc_data['Delta v.y']
-				ss_msg.internal.imu.dv.z = acc_data['Delta v.z']											
+				ss_msg.internal.imu.dv.z = acc_data['Delta v.z']
 			elif 'accX' in acc_data: # found acceleration
 				pub_imu = True
 				imu_msg.linear_acceleration.x = acc_data['accX']
 				imu_msg.linear_acceleration.y = acc_data['accY']
-				imu_msg.linear_acceleration.z = acc_data['accZ']						
+				imu_msg.linear_acceleration.z = acc_data['accZ']
 			else:
-				raise MTException("Unsupported message in XDI_AccelerationGroup.")	
-					
+				raise MTException("Unsupported message in XDI_AccelerationGroup.")
+		# ---------------------------------- added by Harold
+		if acc_data_free: # found free acceleration ---- aded by Harold
+			if 'freeAccX' in acc_data_free:
+                                pub_imu_free = True
+                                imu_msg_free.linear_acceleration.x = acc_data_free['freeAccX']
+                                imu_msg_free.linear_acceleration.y = acc_data_free['freeAccY']
+                                imu_msg_free.linear_acceleration.z = acc_data_free['freeAccZ']
+			else:
+                                raise MTException("Unsupported message in XDI_AccelerationGroup.")
+		# -------------------------------------------------
+
 		if gyr_data:
 			if 'Delta q0' in gyr_data: # found delta-q's
 				pub_ss = True
@@ -266,21 +282,23 @@ class XSensDriver(object):
 			gnssPvt_msg.heading = gnss_data['heading']
 			gnssPvt_msg.headingAcc = gnss_data['headingAcc']
 
-		if orient_data:
-			if 'Q0' in orient_data:
+		# added by harold 
+		if orient_data_quad:
+			if 'Q0' in orient_data_quad:
 				pub_imu = True
-				imu_msg.orientation.w = orient_data['Q0']
-				imu_msg.orientation.x = orient_data['Q1']
-				imu_msg.orientation.y = orient_data['Q2']
-				imu_msg.orientation.z = orient_data['Q3']
-			elif 'Roll' in orient_data:
+				imu_msg.orientation.w = orient_data_quad['Q0']
+				imu_msg.orientation.x = orient_data_quad['Q1']
+				imu_msg.orientation.y = orient_data_quad['Q2']
+				imu_msg.orientation.z = orient_data_quad['Q3']
+		if orient_data:
+			if 'Roll' in orient_data:
 				pub_ori = True
 				ori_msg.roll = orient_data['Roll']
 				ori_msg.pitch = orient_data['Pitch']
-				ori_msg.yaw = orient_data['Yaw']				
+				ori_msg.yaw = orient_data['Yaw']
 			else:
 				raise MTException('Unsupported message in XDI_OrientationGroup')
-
+		# -----------------------------------------------------------------------------
 		if velocity_data:
 			pub_vel = True
 			vel_msg.velE = velocity_data['velX']
@@ -328,6 +346,15 @@ class XSensDriver(object):
 				imu_msg.header.stamp.secs = secs
 				imu_msg.header.stamp.nsecs = nsecs	
 			self.imu_pub.publish(imu_msg)
+		# publish available information free acceleration ------ Added by Harold
+                if pub_imu_free:
+                        imu_msg_free.header = h
+                        if not self.use_rostime:
+                                #all time assignments (overwriting ROS time)
+                                imu_msg_free.header.stamp.secs = secs
+                                imu_msg_free.header.stamp.nsecs = nsecs      
+                        self.imu_free_pub.publish(imu_msg_free)
+		# ---------------------------------------------------------------------
 		#if pub_gps:
 		#	xgps_msg.header = gps_msg.header = h
 		#	self.gps_pub.publish(gps_msg)
