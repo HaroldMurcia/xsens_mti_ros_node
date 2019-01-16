@@ -4,7 +4,7 @@ import struct
 
 import sys, getopt, time, glob, math, pdb, numpy, rospy
 
-from mtdef import MID, MTException, Baudrates, XDIGroup, getName, getMIDName, XDIMessage, XDIProductMask
+from mtdef import MID, DeviceState, MTException, Baudrates, XDIGroup, getName, getMIDName, XDIMessage, XDIProductMask
 
 # Verbose flag for debugging
 verbose = False
@@ -19,6 +19,7 @@ class MTDevice(object):
 	def __init__(self, port, baudrate=115200, timeout=0.1, autoconf=True,
 			config_mode=False):
 		"""Open device."""
+		self.verbose = verbose
 		self.device = serial.Serial(port, baudrate, timeout=timeout,
 				writeTimeout=timeout, rtscts=True, dsrdtr=True)
 		self.device.flushInput()	# flush to make sure the port is ready TODO
@@ -38,7 +39,7 @@ class MTDevice(object):
 			self.header = None
 		if config_mode:
 			self.GoToConfig()
-
+		self.state = None
 	############################################################
 	# Low-level communication
 	############################################################
@@ -52,6 +53,7 @@ class MTDevice(object):
 		else:
 			lendat = [length]
 		packet = [0xFA, 0xFF, mid] + lendat + list(data)
+		print "packet: "+str(packet)
 		packet.append(0xFF&(-(sum(packet[1:]))))
 		msg = struct.pack('%dB'%len(packet), *packet)
 		start = time.time()
@@ -62,6 +64,7 @@ class MTDevice(object):
 		if verbose:
 			print "MT: Write message id 0x%02X (%s) with %d data bytes: [%s]"%(mid, getMIDName(mid), length,
 							' '.join("%02X"% v for v in data))
+
 	## Low-level message sending function for MK4
 	def write_msg_mk4(self, mid, data=[]):
 		"""Low-level message sending function."""
@@ -174,20 +177,34 @@ class MTDevice(object):
 		else:
 			raise MTException("could not find message.")
 
-	## Send a message and read confirmation
-	def write_ack(self, mid, data=[]):
-		"""Send a message a read confirmation."""
-		self.write_msg(mid, data)
-		for tries in range(100):
-			mid_ack, data_ack = self.read_msg()
-			if mid_ack==(mid+1):
-				break
-		else:
-			raise MTException("Ack (0x%X) expected, MID 0x%X received instead"\
-					" (after 100 tries)."%(mid+1, mid_ack))
-		return data_ack
 
+	# --------------------------------------------------------- Added by Harold
+	def write_ack(self, mid, data=b'', n_retries=500):
+        	"""Send a message and read confirmation."""
+        	self.write_msg(mid, data)
+        	for _ in range(n_retries):
+            		mid_ack, data_ack = self.read_msg()
+            		if mid_ack == (mid+1):
+                		break
+           		elif self.verbose:
+                		print "ack (0x%02X) expected, got 0x%02X instead" % \
+                    			(mid+1, mid_ack)
+        	else:
+            		raise MTException("Ack (0x%02X) expected, MID 0x%02X received "
+                              "instead (after %d retries)." % (mid+1, mid_ack,
+                                                               n_retries))
+        	return data_ack
 
+	def _ensure_config_state(self):
+        	"""Switch device to config state if necessary."""
+        	if self.state != DeviceState.Config:
+            		self.GoToConfig()
+
+	def _ensure_measurement_state(self):
+        	"""Switch device to measurement state if necessary."""
+        	if self.state != DeviceState.Measurement:
+            		self.GoToMeasurement()
+	# --------------------------------------------------------
 
 	############################################################
 	# High-level functions
@@ -207,12 +224,15 @@ class MTDevice(object):
 	def GoToConfig(self):
 		"""Place MT device in configuration mode."""
 		self.write_ack(MID.GoToConfig)
+		self.state = DeviceState.Config
 
 
 	## Place MT device in measurement mode.
 	def GoToMeasurement(self):
 		"""Place MT device in measurement mode."""
+		self._ensure_config_state()
 		self.write_ack(MID.GoToMeasurement)
+		self.state = DeviceState.Measurement
 
 
 	## Restore MT device configuration to factory defaults (soft version).
@@ -302,7 +322,7 @@ class MTDevice(object):
 		config = []
 		try:
 			for i in range(len(data_ack)/4):
-				config.append(struct.unpack('!HH', data_ack[i*4:i*4+4]))				
+				config.append(struct.unpack('!HH', data_ack[i*4:i*4+4]))
 		except struct.error:
 			raise MTException("could not parse configuration.")
 		return config
@@ -319,6 +339,21 @@ class MTDevice(object):
 		if bridAck[0] == brid:
 			baudRateAck = True
 		return baudRateAck
+	# ----------------------------------------------------------- added by Harold
+	def GetOptionFlags(self):
+        	"""Get the option flags (MTi-1 series)."""
+        	self._ensure_config_state()
+        	data = self.write_ack(MID.SetOptionFlags)
+        	flags, = struct.unpack('!I', data)
+		print "Flag DATA ---------> "+str(data)+str(flags)
+        	return flags
+
+	def SetOptionFlags(self, set_flags, clear_flags):
+        	"""Set the option flags (MTi-1 series)."""
+        	self._ensure_config_state()
+		data = set_flags + clear_flags
+		self.write_ack(MID.SetOptionFlags, data)
+	# ----------------------------------------------------------
 
 	## Request the available XKF scenarios on the device.
 	# Assume the device is in Config state.
@@ -555,6 +590,7 @@ class MTDevice(object):
 	## Read and parse a measurement packet
 	def read_measurement(self, mode=None, settings=None):
 		# getting data
+		self._ensure_measurement_state()
 		mid, data = self.read_msg()
 		if mid==MID.MTData2:
 			return self.parse_MTData2(data)
@@ -969,9 +1005,8 @@ def main():
 				actions.append('setMtiOutputConfiguration')
 			except ValueError:
 				print "MTi mode argument must be integer."
-				return 1	
-										
-				
+				return 1
+	print "ACTIONS ->>>"+str(actions)
 	# if nothing else: echo
 	if len(actions) == 0:
 		actions.append('echo')
@@ -997,6 +1032,17 @@ def main():
 			mt = MTDevice(device, baudrate)
 		except serial.SerialException:
 			raise MTException("unable to open %s"%device)
+		# ---------------------------------------------------- Added by Harold
+		mt.GetOptionFlags()
+                set_flags  =[00,00,00,16]
+                clear_flags=[00,00,00,128]
+                mt.SetOptionFlags(set_flags, clear_flags)
+                mt.GetOptionFlags()
+		#set_flags  =[00,00,00,128]
+		#clear_flags=[00,00,00,00]
+		#mt.SetOptionFlags(set_flags, clear_flags)
+                #mt.GetOptionFlags()
+		# ---------------------------------------------------
 		# execute actions
 		if 'inspect' in actions:
 			mt.GoToConfig()
@@ -1027,6 +1073,7 @@ def main():
 			print "Device intiated at %d Hz"%(sampleRate)
 			mt.configureMti(sampleRate,mode)
 		if 'echo' in actions:
+			print "echo in actions"
 			try:
 				while True:
 					print mt.read_measurement(mode, settings)

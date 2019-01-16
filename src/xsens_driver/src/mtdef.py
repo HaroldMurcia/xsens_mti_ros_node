@@ -1,6 +1,13 @@
 """Constant and messages definition for MT communication."""
 
 
+class DeviceState:
+    """State of the device"""
+    # measurement state
+    Measurement = 0
+    # config state
+    Config = 1
+
 class MID:
 	"""Values for the message id (MID)"""
 	## Error message, 1 data byte
@@ -59,6 +66,8 @@ class MID:
 	RestoreFactoryDef = 0x0E
 	## Transmit delay (RS485), 2 bytes, number of clock ticks (1/29.4912 MHz)
 	SetTransmitDelay = 0xDC
+	# Set state of OptionFlags (MTi-1/2/3), 4 + 4 bytes  added by Harold
+    	SetOptionFlags = 0x48
 
 	# Synchronization messages
 	## Synchronization settings (MTi-10/100 series only), N*12 bytes
